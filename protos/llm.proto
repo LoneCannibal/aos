@@ -6,9 +6,12 @@ service LlmService {
 }
 
 message LlmRequest {
-  string reply =1;
+  string id =1;
+  string query =2;
+  string context=3;
 }
 
 message LlmReply {
-  string reply=1;
+  string id=1;
+  string answer=2;
 }
