@@ -1,3 +1,5 @@
+from urllib import response
+
 import grpc
 from concurrent import futures
 import protos.auth_pb2 as auth_pb2
@@ -13,8 +15,8 @@ def load_users():
     try:
         with open('users.json', 'r') as users_file:
             return json.load(users_file)
-    except FileNotFoundError:
-        print("USERS FILE NOT FOUND: user.json")
+    except Exception as e:
+        print("USERS FILE NOT FOUND: ",users_file, e)
         return{}
 
 def save_users(users):
@@ -29,7 +31,7 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
 
         # Login failed due to invalid credentials
         if username not in users or users[username]['password'] != password_hash:
-            return auth_pb2_grpc.LoginResponse(success=False, message='Incorrect username or password! Try again.', token='')
+            return auth_pb2.LoginResponse(success=False, message='Incorrect username or password! Try again.', token='')
 
         # Login successful
         token = jwt.encode(
@@ -37,6 +39,7 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
             SECRET_KEY,
             algorithm="HS256"
         )
+        print("User ",username," logged in")
         return auth_pb2.LoginResponse(success=True, message="Login Successful!",token=token)
 
     def Signup(self, request, context):
@@ -52,7 +55,8 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
             "password": request.password,
         }
         save_users(users)
-        return auth_pb2.SignupResposne(success=True, message="Signed up successfully!")
+        print("Signup successful")
+        return auth_pb2.SignupResponse(success=True, message="Signed up successfully!")
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

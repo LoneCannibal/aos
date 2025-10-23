@@ -1,0 +1,14 @@
+syntax ="proto3";
+package llm;
+
+service LlmService {
+  rpc GetLlmAnswer(LlmRequest) returns (LlmReply);
+}
+
+message LlmRequest {
+  string reply =1;
+}
+
+message LlmReply {
+  string reply=1;
+}
