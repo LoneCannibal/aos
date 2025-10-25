@@ -1,12 +1,32 @@
 import grpc
 import protos.auth_pb2 as auth_pb2
 import protos.auth_pb2_grpc as auth_pb2_grpc
+import protos.llm_pb2 as llm_pb2
+import protos.llm_pb2_grpc as llm_pb2_grpc
 import hashlib
 
-#TODO: IMPLEMENT STUFF TO DO HERE
+
 def do_stuff() :
-    print("DOING LOTS OF AMAZING STUFF!!!")
-    return
+    while True:
+        case = int(input("---MENU---\n1.Ask a question\n0.Logout\nCHOOSE WHAT TO DO: "))
+
+        if case == 1:
+            channel = grpc.insecure_channel('localhost:50050')
+            stub = llm_pb2_grpc.LlmServiceStub(channel)
+            query = input("What would you like to know? ")
+            #TODO: IMPLEMENT QUERY ID
+            response = stub.GetLlmAnswer(llm_pb2.LlmRequest(queryId='1', query=query))
+            print(response.answer)
+        # TODO: IMPLEMENT MORE STUFF TO DO HERE
+
+        else:
+            logout()
+
+
+#TODO: IMPLEMENT LOGOUT FUNCTIONALITY
+def logout() :
+    print("LOGGED OUT\n")
+
 def login():
     channel = grpc.insecure_channel('localhost:50051')
     stub = auth_pb2_grpc.AuthServiceStub(channel)
@@ -36,16 +56,11 @@ def signup():
 
 if __name__ == '__main__':
     while True:
-        try:
-            channel = grpc.insecure_channel("localhost:50051")
-            stub = auth_pb2_grpc.AuthServiceStub(channel)
-            case = int(input(" 1.Login\n 2.Signup\n 0.Exit\nSelect an option: "))
-            if case == 1:
-                login()
-            elif case == 2:
-                signup()
-            else:
-                print("Goodbye")
-                exit(0)
-        except Exception as e:
-            print("EXCEPTION: ", e)
+        case = int(input(" 1.Login\n 2.Signup\n 0.Exit\nSelect an option: "))
+        if case == 1:
+            login()
+        elif case == 2:
+            signup()
+        else:
+            print("Goodbye")
+            exit(0)
