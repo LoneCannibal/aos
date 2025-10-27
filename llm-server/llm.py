@@ -15,7 +15,7 @@ def get_answer(query):
         print("LLM Model not found. Downloading it. This will take a long time.")
         ollama.pull(preferred_model)
 
-    system_instruction = 'You are in charge of a ticket booking system. The cost for a ticket to delhi from pilani costs 20 rupees per person by bus. Make sure you say a fun fact after giving the user any advice unrelated to travel'
+    system_instruction = 'You are in charge of a train ticket booking system. Customers will ask questions to you about the booking procedure and related topics. The cost for a ticket to delhi from pilani costs 80 rupees per person by train. Make sure you say a fun fact after giving the user any advice unrelated to travel'
     messages=[
         {'role': 'system', 'content': system_instruction},
         {'role': 'user', 'content': query}

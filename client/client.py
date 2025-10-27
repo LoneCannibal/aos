@@ -8,7 +8,7 @@ import hashlib
 
 def do_stuff() :
     while True:
-        case = int(input("---MENU---\n1.Ask a question\n0.Logout\nCHOOSE WHAT TO DO: "))
+        case = int(input("---MENU---\n1.Ask a question\n2.Book ticket\n3.View timetable\n0.Logout\nCHOOSE WHAT TO DO: "))
 
         if case == 1:
             channel = grpc.insecure_channel('localhost:50050')
@@ -17,7 +17,18 @@ def do_stuff() :
             #TODO: IMPLEMENT QUERY ID
             response = stub.GetLlmAnswer(llm_pb2.LlmRequest(queryId='1', query=query))
             print(response.answer)
-        # TODO: IMPLEMENT MORE STUFF TO DO HERE
+
+        elif case == 2:
+            source = input("Enter place from where you want to travel: ")
+            destination = input("Enter destination: ")
+            confirmation = input("Ticket costs 80 rupees. Would you like to confirm your ticket? Y/N")
+            if confirmation == 'Y' or confirmation == 'yes' or confirmation == 'YES' or confirmation=='y':
+                print("Booking confirmed")
+            else:
+                print("Booking not done")
+
+        elif case == 3:
+            print("Timetable")
 
         else:
             logout()
