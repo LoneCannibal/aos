@@ -1,0 +1,23 @@
+syntax="proto3";
+package raft;
+
+service RaftService {
+  rpc CheckLeader (CheckLeaderRequest) returns (CheckLeaderResponse);
+  rpc Vote (VoteRequest) returns (VoteResponse);
+}
+
+message CheckLeaderRequest {
+  string port =1;
+}
+
+message CheckLeaderResponse {
+  bool is_leader =1;
+}
+
+message VoteRequest {
+  string port = 1;
+}
+
+message VoteResponse {
+  bool take_leadership = 1;
+}

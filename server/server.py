@@ -9,6 +9,10 @@ import jwt
 import time
 
 SECRET_KEY = "sueprsecretkey"
+# PORT_ADDRESS = '[::]:50051'
+PORT_ADDRESS_START ='[::]:5005' #Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
+PORT_ADDRESS_RANGE = 9
+leader_address = ''
 
 # Load user data
 def load_users():
@@ -61,15 +65,24 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthService(), server)
-    server.add_insecure_port('[::]:50051')
-    print(" Server running on port 50051")
-    server.start()
-    server.wait_for_termination()
+    # Search for available ports and generate the port address
+    port_address = ''
+    for port in  range (PORT_ADDRESS_RANGE):
+        try:
+            port_address = PORT_ADDRESS_START+str(port)
+            server.add_insecure_port(port_address)
+            print("Server started on port ", port_address)
+            server.start()
+            server.wait_for_termination()
+            break
+        except Exception as e:
+            print("Port ",port_address," not available trying next one")
+    print("Failed to find available port. Too many nodes are online!")
 
 # TODO: FIX SERVER STOPPING USING KEYBOARD INTERRUPT
 if __name__ == '__main__':
     try:
         serve()
     except KeyboardInterrupt:
-        print("Server stopped!")
-        print("Goodbye")
+        print("Server stopped")
+        print("Goodbye!")
