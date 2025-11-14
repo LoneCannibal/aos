@@ -12,7 +12,7 @@ message CheckLeaderRequest {
   string port = 1;
 }
 message CheckLeaderResponse {
-  bool is_leader = 1;
+  string current_leader =2;
 }
 
 message VoteRequest {
@@ -24,6 +24,7 @@ message VoteResponse {
 
 message HeartBeatRequest {
   string id = 1;
+  int64 timestamp = 2;
 }
 message HeartBeatResponse {
   string id = 1;

@@ -1,3 +1,4 @@
+import random
 from asyncio import timeout
 from urllib import response
 
@@ -15,8 +16,15 @@ SECRET_KEY = "super_secret_key"
 # PORT_ADDRESS = '[::]:50051'
 PORT_ADDRESS_START = 50050  # Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
 PORT_ADDRESS_RANGE = 10
-leader_address = ''  # TODO: Implement functionality where the server checks if it is the leader
+leader_address = ''  # Current known leader's address
 online_servers = []  # List of servers online currently
+heartbeat_timeout = 0
+current_role = "follower"
+last_heartbeat = time.time()
+port_address = ''
+FAILURE_THRESHOLD = 3  # consecutive heartbeat failures before deeming a peer offline
+failure_counts = {}  # target_addr -> consecutive failure count
+
 
 
 # Load user data
@@ -32,6 +40,80 @@ def load_users():
 def save_users(users):
     with open('users.json', 'w') as users_file:
         json.dump(users, users_file)
+
+
+def _extract_port(addr: str) -> int:
+    try:
+        return int(str(addr).split(":")[-1])
+    except Exception:
+        return -1
+
+
+def leader_heartbeat_loop():
+    global failure_counts, leader_address
+    while True:
+        time.sleep(0.15)  # heartbeat interval
+
+        if current_role != "leader":
+            continue
+
+        # Iterate over a snapshot to allow safe removal from online_servers
+        for target in list(online_servers):
+            if target == port_address:
+                continue
+
+            host = target.replace("[::]:", "localhost:")
+
+            try:
+                channel = grpc.insecure_channel(host)
+                stub = raft_pb2_grpc.RaftServiceStub(channel)
+
+                response = stub.HeartBeat(
+                    raft_pb2.HeartBeatRequest(
+                        id=port_address,
+                        timestamp=time.time_ns()
+                    ),
+                    timeout=0.2
+                )
+
+                print(f"[{port_address}] Heartbeat ACK from {response.id}")
+                # Reset failure counter on success
+                if target in failure_counts:
+                    failure_counts[target] = 0
+
+            except Exception as e:
+                # Increment failure count and remove unreachable peers quietly after threshold
+                count = failure_counts.get(target, 0) + 1
+                failure_counts[target] = count
+                if count >= FAILURE_THRESHOLD:
+                    if target in online_servers:
+                        online_servers.remove(target)
+                    # Clear known leader if it was the unreachable peer
+                    if leader_address == target:
+                        leader_address = ''
+                    print(f"[{port_address}] Removed unreachable server {target} after {count} failures")
+                    failure_counts.pop(target, None)
+                else:
+                    # Log only a brief note on first failure to reduce noise
+                    if count == 1:
+                        print(f"[{port_address}] Heartbeat failed to reach {host}; will retry")
+
+def election_timeout_loop():
+    global current_role, last_heartbeat, leader_address
+    while True:
+        time.sleep(0.1)
+        timeout_period = random.uniform(1.0, 2.0)
+
+        if current_role != "leader" and (time.time() - last_heartbeat) > timeout_period:
+            print(f"[{port_address}] HEARTBEAT TIMEOUT → become leader")
+            current_role = "leader"
+            leader_address = port_address
+            last_heartbeat = time.time()
+
+def start_background_threads():
+    import threading
+    threading.Thread(target=election_timeout_loop, daemon=True).start()
+    threading.Thread(target=leader_heartbeat_loop, daemon=True).start()
 
 
 class AuthService(auth_pb2_grpc.AuthServiceServicer):
@@ -69,40 +151,81 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
         print("Signup successful")
         return auth_pb2.SignupResponse(success=True, message="Signed up successfully!")
 
+
 class RaftService(raft_pb2_grpc.RaftServiceServicer):
     def Ping(self, request, context):
         return raft_pb2.Pong(message="Hi")
 
+    def HeartBeat(self, request, context):
+        global last_heartbeat, current_role, heartbeat_timeout, leader_address
+        # follower receives heartbeat from leader
+        last_heartbeat = time.time()
+
+        sender = request.id
+        # Ensure we track the sender in membership list
+        if sender not in online_servers:
+            online_servers.append(sender)
+        # If we are leader and receive a heartbeat from another node, resolve conflict by
+        # choosing the node with the lower port number as leader (simple deterministic rule).
+        if current_role == "leader":
+            my_port = _extract_port(port_address)
+            sender_port = _extract_port(sender)
+            if sender_port != -1 and my_port != -1 and sender_port < my_port:
+                print(f"[{port_address}] Stepping down. Higher-priority leader detected: {sender}")
+                current_role = "follower"
+                leader_address = sender
+        else:
+            # We are follower; update known leader
+            leader_address = sender
+
+        print(f"[{port_address}] Received heartbeat from {request.id}")
+
+        # follower replies to leader
+        return raft_pb2.HeartBeatResponse(
+            id=port_address,
+            timestamp=time.time_ns()
+        )
+    def CheckLeader(self, request, context):
+        return raft_pb2.CheckLeaderResponse(current_leader=leader_address)
+
+
+
 def serve():
+    global port_address, leader_address
     # SERVER DISCOVERY
     for i in range(PORT_ADDRESS_RANGE):
-        server_address =  f"[::]:{PORT_ADDRESS_START + i}"
-        #Ping all servers and see which ones are online
+        server_address = f"[::]:{PORT_ADDRESS_START + i}"
+        # Ping all servers and see which ones are online
         try:
-            channel = grpc.insecure_channel( f"localhost:{PORT_ADDRESS_START + i}")
+            channel = grpc.insecure_channel(f"localhost:{PORT_ADDRESS_START + i}")
             stub = raft_pb2_grpc.RaftServiceStub(channel)
-            ping_response = stub.Ping(raft_pb2.Empty(),timeout=0.1)
+            ping_response = stub.Ping(raft_pb2.Empty(), timeout=0.1)
             online_servers.append(server_address)
-            print("Server found at: ",server_address)
+            print("Server found at: ", server_address)
         except Exception as e:
-            print("No server found at: ",server_address)
+            print("No server found at: ", server_address)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthService(), server)
     raft_pb2_grpc.add_RaftServiceServicer_to_server(RaftService(), server)
 
     # Search for available ports and generate the port address
-    port_address = ''
     for port in range(PORT_ADDRESS_RANGE):
         try:
-            port_address =  f"[::]:{PORT_ADDRESS_START + port}"
+            port_address = f"[::]:{PORT_ADDRESS_START + port}"
             server.add_insecure_port(port_address)
             print("Server started on port ", port_address)
+            # Add self to the known online servers list if not present
+            if port_address not in online_servers:
+                online_servers.append(port_address)
+            start_background_threads()
             server.start()
             server.wait_for_termination()
             break
         except Exception as e:
             print("Port ", port_address, " not available trying next one")
     print("Failed to find available port. Too many nodes are online!")
+
+    # TODO: HEARTBEAT GENERATION
 
 
 # TODO: FIX SERVER STOPPING USING KEYBOARD INTERRUPT
