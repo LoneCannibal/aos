@@ -24,8 +24,6 @@ def init_node_db(node_name):
         CREATE TABLE Booking (
             BookingID INTEGER PRIMARY KEY AUTOINCREMENT,
             UserID TEXT,
-            Source TEXT,
-            Destination TEXT,
             NumPassengers INTEGER,
             FOREIGN KEY (UserID) REFERENCES User(UserID)
         );
@@ -38,6 +36,19 @@ def init_node_db(node_name):
             Action TEXT,
             BookingID INTEGER,
             FOREIGN KEY (BookingID) REFERENCES Booking(BookingID)
+        );
+    """)
+
+    # New table to facilitate train bookings
+    conn.execute("""
+        CREATE TABLE Trains (
+            TrainNumber TEXT PRIMARY KEY,
+            TrainName TEXT NOT NULL,
+            Source TEXT NOT NULL,
+            Destination TEXT NOT NULL,
+            Cost REAL NOT NULL,
+            AvailableSeats INTEGER NOT NULL,
+            DateTime TEXT NOT NULL
         );
     """)
 

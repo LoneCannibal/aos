@@ -9,6 +9,8 @@ import protos.auth_pb2_grpc as auth_pb2_grpc
 import protos.raft_pb2 as raft_pb2
 import protos.raft_pb2_grpc as raft_pb2_grpc
 import json
+import os
+import sqlite3
 import jwt
 import time
 
@@ -28,19 +30,44 @@ failure_counts = {}  # target_addr -> consecutive failure count
 
 
 
-# Load user data
+
+
+def _get_db_connection():
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    node_id = _extract_port(port_address)%10 #Last digit of port address
+    db_path = os.path.join(data_dir, f"node{node_id}_db.sqlite")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+
 def load_users():
     try:
-        with open('users.json', 'r') as users_file:
-            return json.load(users_file)
+        conn = _get_db_connection()
+        cursor = conn.execute("SELECT UserID, Password FROM User")
+        users = {row[0]: {"password": row[1]} for row in cursor.fetchall()}
+        conn.close()
+        return users
     except Exception as e:
-        print("USERS FILE NOT FOUND: ", users_file, e)
+        print("Failed to load users from SQLite:", e)
         return {}
 
 
 def save_users(users):
-    with open('users.json', 'w') as users_file:
-        json.dump(users, users_file)
+    try:
+        conn = _get_db_connection()
+        # Upsert each user record
+        for username, info in users.items():
+            password_hash = info.get("password") if isinstance(info, dict) else info
+            conn.execute(
+                "INSERT OR REPLACE INTO User (UserID, Password) VALUES (?, ?)",
+                (username, password_hash),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Failed to save users to SQLite:", e)
 
 
 def _extract_port(addr: str) -> int:
