@@ -1,23 +1,36 @@
-syntax="proto3";
+syntax = "proto3";
 package raft;
 
 service RaftService {
   rpc CheckLeader (CheckLeaderRequest) returns (CheckLeaderResponse);
   rpc Vote (VoteRequest) returns (VoteResponse);
+  rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
+  rpc Ping(Empty) returns (Pong);
 }
 
 message CheckLeaderRequest {
-  string port =1;
+  string port = 1;
 }
-
 message CheckLeaderResponse {
-  bool is_leader =1;
+  bool is_leader = 1;
 }
 
 message VoteRequest {
   string port = 1;
 }
-
 message VoteResponse {
   bool take_leadership = 1;
+}
+
+message HeartBeatRequest {
+  string id = 1;
+}
+message HeartBeatResponse {
+  string id = 1;
+  int64 timestamp = 2;
+}
+
+message Empty{}
+message Pong {
+  string message = 1;
 }
