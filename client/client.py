@@ -7,10 +7,12 @@ import protos.raft_pb2 as raft_pb2
 import protos.raft_pb2_grpc as raft_pb2_grpc
 import hashlib
 
-PORT_ADDRESS_START = 5005  # Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
+NOISY = True # !!! CHANGE THIS TO FALSE TO REDUCE NUMBER OF PRINTED LOGS !!!
+PORT_ADDRESS_START = 50050  # Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
 PORT_ADDRESS_RANGE = 10
 LLM_ADDRESS = 'localhost:50080'
 current_leader_address = ''  # Cache the current leader address
+
 
 
 def do_stuff():
@@ -40,15 +42,43 @@ def do_stuff():
 
         else:
             logout()
+            return
+
+def find_leader():
+    for i in range(PORT_ADDRESS_RANGE):
+        global current_leader_address
+        server_address = f"localhost:{PORT_ADDRESS_START + i}"
+        # Ping all servers and see which ones are online
+        try:
+            channel = grpc.insecure_channel(server_address)
+            stub = raft_pb2_grpc.RaftServiceStub(channel)
+            ping_response = stub.Ping(raft_pb2.Empty(), timeout=0.1)
+
+            # If any server is found, ask it for current leader address
+            if ping_response.message =='Hi':
+                if NOISY: print("Found server: ", server_address)
+                temp_address = stub.CheckLeader(raft_pb2.Empty()).current_leader
+                current_leader_address = f"localhost:{temp_address.split(':')[-1]}"
+                if NOISY: print("Leader found at: ", current_leader_address)
+                break
+
+
+        except Exception as e:
+            if NOISY:
+                print("No server found at: ", server_address)
+
 
 
 # TODO: IMPLEMENT LOGOUT FUNCTIONALITY
 def logout():
     print("LOGGED OUT\n")
+    return
 
 
 def login():
-    channel = grpc.insecure_channel('localhost:50050')
+    global current_leader_address
+    find_leader()
+    channel = grpc.insecure_channel(current_leader_address)
     stub = auth_pb2_grpc.AuthServiceStub(channel)
 
     # Enter username and password
@@ -61,10 +91,13 @@ def login():
     if response.success:
         print("Login Token: ", response.token)
         do_stuff()
+        return
 
 
 def signup():
-    channel = grpc.insecure_channel('localhost:50050')
+    global current_leader_address
+    find_leader()
+    channel = grpc.insecure_channel(current_leader_address)
     stub = auth_pb2_grpc.AuthServiceStub(channel)
 
     username = input("Choose a username: ")

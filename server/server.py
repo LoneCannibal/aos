@@ -12,6 +12,7 @@ import json
 import jwt
 import time
 
+NOISY = True # !!! CHANGE THIS TO FALSE TO REDUCE NUMBER OF PRINTED LOGS !!!
 SECRET_KEY = "super_secret_key"
 # PORT_ADDRESS = '[::]:50051'
 PORT_ADDRESS_START = 50050  # Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
@@ -76,7 +77,7 @@ def leader_heartbeat_loop():
                     timeout=0.2
                 )
 
-                print(f"[{port_address}] Heartbeat ACK from {response.id}")
+                if NOISY: print(f"[{port_address}] Heartbeat ACK from {response.id}")
                 # Reset failure counter on success
                 if target in failure_counts:
                     failure_counts[target] = 0
@@ -143,7 +144,6 @@ class AuthService(auth_pb2_grpc.AuthServiceServicer):
             return auth_pb2.SignupResponse(success=False, message='Username already exists! Please choose another one')
 
         # User signed up successfully
-        # TODO: CHECK IF THE PASSWORD HASHING IS WORKING PROPERLY HERE!!!!
         users[request.username] = {
             "password": request.password,
         }
@@ -178,7 +178,7 @@ class RaftService(raft_pb2_grpc.RaftServiceServicer):
             # We are follower; update known leader
             leader_address = sender
 
-        print(f"[{port_address}] Received heartbeat from {request.id}")
+        if NOISY: print(f"[{port_address}] Received heartbeat from {request.id}")
 
         # follower replies to leader
         return raft_pb2.HeartBeatResponse(
@@ -203,7 +203,7 @@ def serve():
             online_servers.append(server_address)
             print("Server found at: ", server_address)
         except Exception as e:
-            print("No server found at: ", server_address)
+            if NOISY: print("No server found at: ", server_address)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthService(), server)
     raft_pb2_grpc.add_RaftServiceServicer_to_server(RaftService(), server)
@@ -222,7 +222,7 @@ def serve():
             server.wait_for_termination()
             break
         except Exception as e:
-            print("Port ", port_address, " not available trying next one")
+           if NOISY: print("Port ", port_address, " not available trying next one")
     print("Failed to find available port. Too many nodes are online!")
 
     # TODO: HEARTBEAT GENERATION

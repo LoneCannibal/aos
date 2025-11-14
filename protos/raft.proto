@@ -2,15 +2,12 @@ syntax = "proto3";
 package raft;
 
 service RaftService {
-  rpc CheckLeader (CheckLeaderRequest) returns (CheckLeaderResponse);
+  rpc CheckLeader (Empty) returns (CheckLeaderResponse);
   rpc Vote (VoteRequest) returns (VoteResponse);
   rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
   rpc Ping(Empty) returns (Pong);
 }
 
-message CheckLeaderRequest {
-  string port = 1;
-}
 message CheckLeaderResponse {
   string current_leader =2;
 }
