@@ -6,6 +6,8 @@ service RaftService {
   rpc Vote (VoteRequest) returns (VoteResponse);
   rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
   rpc Ping(Empty) returns (Pong);
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+  rpc GetAllLogs(Empty) returns (GetAllLogsResponse);
 }
 
 message CheckLeaderResponse {
@@ -31,4 +33,27 @@ message HeartBeatResponse {
 message Empty{}
 message Pong {
   string message = 1;
+}
+
+// Log replication messages
+message LogEntry {
+  int32 term = 1;
+  string timestamp = 2;
+  string leader_id = 3;
+  string action = 4;
+  string data = 5;
+}
+
+message AppendEntriesRequest {
+  repeated LogEntry entries = 1;
+}
+
+message AppendEntriesResponse {
+  bool success = 1;
+  int32 count = 2; // number of entries appended
+}
+
+// Full log sync
+message GetAllLogsResponse {
+  repeated LogEntry entries = 1;
 }

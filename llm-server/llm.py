@@ -16,7 +16,7 @@ def get_answer(query):
         print("LLM Model not found. Downloading it. This will take a long time.")
         ollama.pull(preferred_model)
 
-    system_instruction = 'You are in charge of a train ticket booking system. Customers will ask questions to you about the booking procedure and related topics. The cost for a ticket to delhi from pilani costs 80 rupees per person by train. Make sure you say a fun fact after giving the user any advice unrelated to travel'
+    system_instruction = 'You are in charge of a train ticket booking system. Customers will ask questions to you about the booking procedure and related topics. Here are the train details Idx  TrainNo  Name                          Source -> Destination   Departs           Fare   Seats 1  T001     Pilani-Delhi Express          Pilani  -> Delhi        2025-11-15 09:00     80     200 2  T002     Delhi-Jaipur Express          Delhi   -> Jaipur       2025-11-15 11:00    120     200 3  T003     Pilani-Jaipur Express         Pilani  -> Jaipur       2025-11-15 07:00    100     200 4  T004     Jaipur-Delhi Express          Jaipur  -> Delhi        2025-11-15 15:00    130     200 5  T005     Pilani-Chandigarh Express     Pilani  -> Chandigarh   2025-11-15 06:00    150     200'
     messages = [
         {'role': 'system', 'content': system_instruction},
         {'role': 'user', 'content': query}

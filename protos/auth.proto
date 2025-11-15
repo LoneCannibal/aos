@@ -4,6 +4,7 @@ package auth;
 service AuthService {
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc Signup (SignupRequest) returns (SignupResponse);
+  rpc CreateBooking (BookingRequest) returns (BookingResponse);
 }
 
 message LoginRequest {
@@ -25,4 +26,16 @@ message SignupRequest {
 message SignupResponse {
   bool success=1;
   string message =2;
+}
+
+// Booking messages
+message BookingRequest {
+  string username = 1;
+  string train_number = 2;
+  int32 qty = 3;
+}
+
+message BookingResponse {
+  bool success = 1;
+  string message = 2;
 }

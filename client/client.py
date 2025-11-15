@@ -6,12 +6,42 @@ import protos.llm_pb2_grpc as llm_pb2_grpc
 import protos.raft_pb2 as raft_pb2
 import protos.raft_pb2_grpc as raft_pb2_grpc
 import hashlib
+from datetime import datetime
+import json
+
+# Local mirror of initial train data (kept in sync with server/db_init.py)
+TRAIN_DATA = [
+    ("T001", "Pilani-Delhi Express", "Pilani", "Delhi", 80.0, 200, "09:00"),
+    ("T002", "Delhi-Jaipur Express", "Delhi", "Jaipur", 120.0, 200, "11:00"),
+    ("T003", "Pilani-Jaipur Express", "Pilani", "Jaipur", 100.0, 200, "07:00"),
+    ("T004", "Jaipur-Delhi Express", "Jaipur", "Delhi", 130.0, 200, "15:00"),
+    ("T005", "Pilani-Chandigarh Express", "Pilani", "Chandigarh", 150.0, 200, "06:00"),
+]
+
+# In-memory availability tracker for this client session
+_available_seats = {row[0]: row[5] for row in TRAIN_DATA}
+
+def _today_dt_str(time_str: str) -> str:
+    today = datetime.now().strftime("%Y-%m-%d")
+    return f"{today} {time_str}"
+
+def _print_timetable():
+    print("\nAvailable Trains:")
+    print("Idx  TrainNo  Name                          Source -> Destination   Departs           Fare   Seats")
+    print("---- -------- ----------------------------- ----------------------- ----------------- ------ -----")
+    for idx, (tn, name, src, dst, cost, _seats, dep_time) in enumerate(TRAIN_DATA, start=1):
+        seats_left = _available_seats.get(tn, 0)
+        print(
+            f"{idx:>3}  {tn:<8} {name:<29} {src:<7} -> {dst:<12} {_today_dt_str(dep_time):<17} {cost:>5.0f}   {seats_left:>5}"
+        )
+    print("")
 
 NOISY = True # !!! CHANGE THIS TO FALSE TO REDUCE NUMBER OF PRINTED LOGS !!!
 PORT_ADDRESS_START = 50050  # Range from port 500050 to 50059, can be extended later Currently 50050 to 50059
 PORT_ADDRESS_RANGE = 10
 LLM_ADDRESS = 'localhost:50080'
 current_leader_address = ''  # Cache the current leader address
+CURRENT_USER = ''  # Logged-in username for booking attribution
 
 
 
@@ -29,16 +59,67 @@ def do_stuff():
             print(response.answer)
 
         elif case == 2:
-            source = input("Enter place from where you want to travel: ")
-            destination = input("Enter destination: ")
-            confirmation = input("Ticket costs 80 rupees. Would you like to confirm your ticket? Y/N")
-            if confirmation == 'Y' or confirmation == 'yes' or confirmation == 'YES' or confirmation == 'y':
-                print("Booking confirmed")
+            # Book tickets: show timetable, pick a train, choose number of tickets, and confirm
+            _print_timetable()
+            try:
+                choice = int(input("Enter the index of the train you want to book (0 to cancel): "))
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+                continue
+            if choice == 0:
+                continue
+            if choice < 1 or choice > len(TRAIN_DATA):
+                print("Invalid train selection.")
+                continue
+            tn, name, src, dst, cost, _seats, dep_time = TRAIN_DATA[choice - 1]
+
+            try:
+                qty = int(input("How many tickets would you like to book? "))
+            except ValueError:
+                print("Please enter a valid number for tickets.")
+                continue
+            if qty <= 0:
+                print("Number of tickets must be positive.")
+                continue
+
+            seats_left = _available_seats.get(tn, 0)
+            if qty > seats_left:
+                print(f"Sorry, only {seats_left} seats are available on {tn}.")
+                continue
+
+            total_cost = qty * cost
+            confirmation = input(
+                f"You are booking {qty} ticket(s) on {tn} ({src}->{dst}) departing {_today_dt_str(dep_time)}.\n"
+                f"Total cost: Rs {total_cost}. Confirm? Y/N: "
+            )
+            if confirmation.lower() in ['y', 'yes']:
+                if not CURRENT_USER:
+                    print("You must be logged in to book. Please login again.")
+                    continue
+                # Send booking to server via AuthService.CreateBooking; server will replicate via Raft
+                try:
+                    channel = grpc.insecure_channel(current_leader_address)
+                    auth_stub = auth_pb2_grpc.AuthServiceStub(channel)
+                    resp = auth_stub.CreateBooking(
+                        auth_pb2.BookingRequest(
+                            username=CURRENT_USER,
+                            train_number=tn,
+                            qty=qty,
+                        ),
+                        timeout=1.0,
+                    )
+                    if getattr(resp, 'success', False):
+                        _available_seats[tn] = seats_left - qty
+                        print(f"Booking confirmed and saved! {qty} ticket(s) booked. Remaining seats on {tn}: {_available_seats[tn]}\n")
+                    else:
+                        print(f"Booking failed: {getattr(resp, 'message', 'Unknown error')}\n")
+                except Exception as e:
+                    print(f"Error while saving booking: {e}")
             else:
-                print("Booking not done")
+                print("Booking cancelled.\n")
 
         elif case == 3:
-            print("Timetable")
+            _print_timetable()
 
         else:
             logout()
@@ -77,6 +158,7 @@ def logout():
 
 def login():
     global current_leader_address
+    global CURRENT_USER
     find_leader()
     channel = grpc.insecure_channel(current_leader_address)
     stub = auth_pb2_grpc.AuthServiceStub(channel)
@@ -90,6 +172,7 @@ def login():
     print(response.message)
     if response.success:
         print("Login Token: ", response.token)
+        CURRENT_USER = username
         do_stuff()
         return
 
